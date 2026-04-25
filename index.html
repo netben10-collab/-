@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>סריקת חשבוניות — מילוי אוטומטי</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f5f6f8;
+      color: #323338;
+      direction: rtl;
+      min-height: 100vh;
+    }
+    .header {
+      background: #0073ea;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .header-sub { font-size: 13px; opacity: 0.8; margin-top: 2px; }
+
+    .container { max-width: 640px; margin: 24px auto; padding: 0 16px 48px; }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      border: 1px solid #e6e9ef;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #676879;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 14px;
+    }
+
+    /* API Key */
+    .api-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #c3c6d4;
+      border-radius: 8px;
+      font-size: 14px;
+      direction: ltr;
+      text-align: left;
+    }
+    .api-input:focus { outline: none; border-color: #0073ea; box-shadow: 0 0 0 3px rgba(0,115,234,0.12); }
+
+    /* Upload */
+    .upload-area {
+      border: 2px dashed #c3c6d4;
+      border-radius: 12px;
+      padding: 36px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #fafbff;
+    }
+    .upload-area:hover, .upload-area.drag { border-color: #0073ea; background: #e8f0fe; }
+    .upload-icon { font-size: 44px; margin-bottom: 10px; }
+    .upload-area p { color: #676879; font-size: 15px; margin-bottom: 4px; }
+    .upload-area strong { color: #0073ea; }
+    .upload-area small { color: #aab0bc; font-size: 12px; }
+    #fileInput { display: none; }
+
+    #preview {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      margin-top: 16px;
+      display: none;
+      border: 1px solid #e6e9ef;
+    }
+
+    .scan-btn {
+      width: 100%;
+      padding: 13px;
+      background: #0073ea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 14px;
+      display: none;
+      transition: background 0.2s;
+      letter-spacing: -0.2px;
+    }
+    .scan-btn:hover:not(:disabled) { background: #0060c0; }
+    .scan-btn:disabled { background: #c3c6d4; cursor: not-allowed; }
+
+    /* Loading */
+    .loading { display: none; text-align: center; padding: 32px; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #e6e9ef;
+      border-top-color: #0073ea;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading p { color: #676879; font-size: 15px; }
+
+    /* Error */
+    .error {
+      background: #fde8ec;
+      color: #d83a52;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 12px;
+      display: none;
+      font-size: 14px;
+      border: 1px solid #f5c0cb;
+    }
+
+    /* Results */
+    #results { display: none; }
+
+    .results-banner {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #15803d;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aab0bc;
+      margin: 20px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e6e9ef;
+    }
+
+    /* Form Field */
+    .field { margin-bottom: 16px; }
+    .field-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #323338;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .required { color: #d83a52; font-size: 14px; }
+
+    .field-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .field-row input,
+    .field-row textarea {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #c3c6d4;
+      border-radius: 8px;
+      font-size: 15px;
+      background: #f0f6ff;
+      color: #323338;
+      font-family: inherit;
+      direction: rtl;
+    }
+    .field-row textarea { min-height: 72px; resize: vertical; }
+    .field-row input:focus, .field-row textarea:focus {
+      outline: none;
+      border-color: #0073ea;
+      box-shadow: 0 0 0 3px rgba(0,115,234,0.1);
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      padding: 0 14px;
+      background: #f5f6f8;
+      border: 1px solid #c3c6d4;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: #323338;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: #e8f0fe; border-color: #0073ea; color: #0073ea; }
+    .copy-btn.copied { background: #dcfce7; border-color: #16a34a; color: #16a34a; }
+
+    /* Manual field */
+    .manual-box {
+      padding: 11px 14px;
+      border: 1.5px dashed #d4a800;
+      border-radius: 8px;
+      background: #fffbeb;
+      color: #92400e;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .manual-box.hint {
+      border-color: #0073ea;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    /* Monday link */
+    .monday-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px;
+      background: #0073ea;
+      color: white;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+      margin-top: 24px;
+      transition: background 0.2s;
+    }
+    .monday-btn:hover { background: #0060c0; }
+    .monday-logo { font-size: 20px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📄 סריקת חשבוניות — מילוי אוטומטי</h1>
+    <div class="header-sub">חשבוניות לאישור · ניהול תשלומים/ספקים</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- API Key -->
+  <div class="card">
+    <div class="card-title">🔑 מפתח API</div>
+    <input type="password" class="api-input" id="apiKey" placeholder="sk-ant-api..." autocomplete="off" />
+  </div>
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-title">📎 העלאת חשבונית</div>
+    <div class="upload-area" id="uploadArea">
+      <div class="upload-icon">📷</div>
+      <p><strong>לחץ להעלאת תמונה</strong> או גרור לכאן</p>
+      <small>JPG · PNG · WEBP</small>
+    </div>
+    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" />
+    <img id="preview" alt="תצוגה מקדימה" />
+    <div class="error" id="error"></div>
+    <button class="scan-btn" id="scanBtn" onclick="scan()">🔍 סרוק וחלץ נתונים</button>
+  </div>
+
+  <!-- Loading -->
+  <div class="card loading" id="loading">
+    <div class="spinner"></div>
+    <p>קורא את החשבונית...</p>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="results-banner">
+      ✅ הנתונים חולצו! העתק כל שדה לפורם ב-Monday.com
+    </div>
+
+    <div class="card">
+      <div class="card-title">📝 פורם: ניהול תשלומים / ספקים</div>
+
+      <!-- AUTO FIELDS -->
+      <div class="section-label">מולאו אוטומטית</div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> מספר חשבונית <small style="color:#aab0bc;font-weight:400">(כפי שמופיע במסמך)</small></div>
+        <div class="field-row">
+          <input type="text" id="f_invoice_number" readonly />
+          <button class="copy-btn" onclick="copyField('f_invoice_number', this)">העתק</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">שם הספק</div>
+        <div class="field-row">
+          <input type="text" id="f_supplier_name" readonly />
+          <button class="copy-btn" onclick="copyField('f_supplier_name', this)">העתק</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> תאריך חשבונית <small style="color:#aab0bc;font-weight:400">(כפי שמופיע על המסמך)</small></div>
+        <div class="field-row">
+          <input type="text" id="f_date" readonly />
+          <button class="copy-btn" onclick="copyField('f_date', this)">העתק</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> סכום כולל מעמ <small style="color:#aab0bc;font-weight:400">(כולל אגורות)</small></div>
+        <div class="field-row">
+          <input type="text" id="f_amount" readonly />
+          <button class="copy-btn" onclick="copyField('f_amount', this)">העתק</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> מהות השירות</div>
+        <div class="field-row">
+          <textarea id="f_service" readonly></textarea>
+          <button class="copy-btn" onclick="copyField('f_service', this)">העתק</button>
+        </div>
+      </div>
+
+      <!-- SUGGESTED FIELDS -->
+      <div class="section-label">זוהה אוטומטית — בחר ב-Monday</div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> סוג מסמך</div>
+        <div class="manual-box hint" id="f_doc_type">⬇️ בחר ב-Monday.com</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">תנאי תשלום</div>
+        <div class="manual-box hint" id="f_payment_terms">⬇️ בחר ב-Monday.com</div>
+      </div>
+
+      <!-- MANUAL FIELDS -->
+      <div class="section-label">למילוי ידני</div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> סעיף תקציבי</div>
+        <div class="manual-box">⬇️ בחר מהרשימה ב-Monday.com</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> שם הבניין <small style="color:#aab0bc;font-weight:400">(יש לשייך לבניין אחד בלבד)</small></div>
+        <div class="manual-box">⬇️ בחר מהרשימה ב-Monday.com</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> ספקים</div>
+        <div class="manual-box">⬇️ בחר מהרשימה ב-Monday.com</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> מגיש החשבונית</div>
+        <div class="manual-box">⬇️ בחר מהרשימה ב-Monday.com</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> גורם משלם</div>
+        <div class="manual-box">⬇️ בחר מהרשימה ב-Monday.com</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">הערות למאשר</div>
+        <div class="field-row">
+          <textarea id="f_notes" placeholder="הוסף הערות ידנית אם נדרש..."></textarea>
+          <button class="copy-btn" onclick="copyField('f_notes', this)">העתק</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="required">*</span> מסמך</div>
+        <div class="manual-box">📎 העלה את קובץ החשבונית ישירות בפורם ב-Monday.com</div>
+      </div>
+
+      <a href="https://the-social-space.monday.com/boards/7344036949?dl_slug=the-social-space&share_id=2AFBB259-829E-4461-A171-5E6EC5140DAE&link_type=board"
+         target="_blank" class="monday-btn">
+        <span class="monday-logo">🟦</span>
+        פתח פורם Monday.com ↗
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let imageBase64 = '';
+  let imageMediaType = 'image/jpeg';
+
+  const uploadArea = document.getElementById('uploadArea');
+  const fileInput  = document.getElementById('fileInput');
+  const preview    = document.getElementById('preview');
+  const scanBtn    = document.getElementById('scanBtn');
+
+  uploadArea.addEventListener('click', () => fileInput.click());
+
+  uploadArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadArea.classList.add('drag');
+  });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag'));
+  uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  function handleFile(file) {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      showError('נא להעלות קובץ תמונה: JPG, PNG, WEBP');
+      return;
+    }
+    imageMediaType = file.type;
+    const reader = new FileReader();
+    reader.onload = e => {
+      imageBase64 = e.target.result.split(',')[1];
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+      scanBtn.style.display = 'block';
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('error').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function scan() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    if (!apiKey) { showError('נא להזין מפתח API'); return; }
+    if (!imageBase64) { showError('נא להעלות תמונת חשבונית'); return; }
+
+    scanBtn.disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+
+    try {
+      const res = await fetch('/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageBase64, apiKey, mediaType: imageMediaType })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      fillResults(data);
+    } catch (e) {
+      showError('שגיאה בסריקה: ' + e.message);
+    } finally {
+      scanBtn.disabled = false;
+      document.getElementById('loading').style.display = 'none';
+    }
+  }
+
+  function fillResults(data) {
+    document.getElementById('f_invoice_number').value = data.invoice_number || '';
+    document.getElementById('f_supplier_name').value  = data.supplier_name  || '';
+    document.getElementById('f_date').value           = data.date           || '';
+    document.getElementById('f_amount').value         = data.amount_total   || '';
+    document.getElementById('f_service').value        = data.service_description || '';
+
+    const docTypeEl = document.getElementById('f_doc_type');
+    if (data.doc_type) {
+      docTypeEl.className = 'manual-box hint';
+      docTypeEl.innerHTML = '💡 זוהה: <strong>' + data.doc_type + '</strong> &nbsp;—&nbsp; אשר ב-Monday.com';
+    } else {
+      docTypeEl.className = 'manual-box';
+      docTypeEl.textContent = '⬇️ בחר מהרשימה ב-Monday.com';
+    }
+
+    const ptEl = document.getElementById('f_payment_terms');
+    if (data.payment_terms) {
+      ptEl.className = 'manual-box hint';
+      ptEl.innerHTML = '💡 זוהה: <strong>' + data.payment_terms + '</strong> &nbsp;—&nbsp; אשר ב-Monday.com';
+    } else {
+      ptEl.className = 'manual-box';
+      ptEl.textContent = '⬇️ בחר מהרשימה ב-Monday.com';
+    }
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function copyField(id, btn) {
+    const val = document.getElementById(id).value;
+    if (!val) return;
+    navigator.clipboard.writeText(val).then(() => {
+      btn.textContent = '✓ הועתק';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'העתק';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+  }
+</script>
+
+</body>
+</html>
